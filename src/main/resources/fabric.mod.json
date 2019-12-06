@@ -1,37 +1,24 @@
 {
   "schemaVersion": 1,
-  "id": "modid",
+  "id": "bad_mod_detective",
   "version": "${version}",
 
-  "name": "Example Mod",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "name": "Bad Mod Detective",
+  "description": "Detects bad mods.",
   "authors": [
-    "Me!"
+    "Juuz"
   ],
-  "contact": {
-    "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
-  },
 
-  "license": "CC0-1.0",
-  "icon": "assets/modid/icon.png",
+  "license": "GPL-3.0-only",
 
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.fabricmc.example.ExampleMod"
+      "juuxel.badmoddetective.BadModDetective"
     ]
   },
-  "mixins": [
-    "modid.mixins.json"
-  ],
 
   "depends": {
-    "fabricloader": ">=0.4.0",
-    "fabric": "*",
-    "minecraft": "1.14.x"
-  },
-  "suggests": {
-    "flamingo": "*"
+    "fabricloader": ">=0.4.0"
   }
 }
