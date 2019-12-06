@@ -1,16 +1,8 @@
-# Fabric Example Mod
+# Bad Mod Detective
 
-## Setup
+Detects and crashes potentially bugged Fabric mods containing these issues:
 
-1. Edit build.gradle and mod.json to suit your needs.
-    * The "mixins" object can be removed from mod.json if you do not need to use mixins.
-    * Please replace all occurences of "modid" with your own mod ID - sometimes, a different string may also suffice.
-2. Run the following command:
-
-```
-./gradlew idea
-```
-
-## License
-
-This template is available under the CC0 license. Feel free to learn from it and incorporate it in your own projects.
+- Missing `${version}` replacements (`${version}` in production environments)
+- Unnamed mixin refmaps caused by Jitpack (`build-refmap.json`)
+- Outdated schemas (v0)
+- Using `requires` from v0 schema in v1 fabric.mod.json (instead of `depends`)
