@@ -20,7 +20,9 @@ import org.apache.logging.log4j.spi.AbstractLogger;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public final class BadModDetective implements ModInitializer {
@@ -61,16 +63,49 @@ public final class BadModDetective implements ModInitializer {
         LOGGER.info("[BadModDetective] No bad mods found!");
     }
 
-    private interface Source {
-        String getId();
-
-        String getInfo();
+    private static <T> Comparator<T> merge(Comparator<T> primary, Comparator<T> secondary) {
+        return (a, b) -> {
+            int primaryResult = primary.compare(a, b);
+            if (primaryResult != 0) return primaryResult;
+            return secondary.compare(a, b);
+        };
     }
 
-    private static final class ModSource implements Source {
+    private enum SourceType {
+        MOD, PACKAGE
+    }
+
+    private abstract static class Source {
+        final SourceType type;
+
+        protected Source(SourceType type) {
+            this.type = type;
+        }
+
+        public final SourceType getType() {
+            return type;
+        }
+
+        public abstract String getId();
+
+        public abstract String getInfo();
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof Source && getId().equals(((Source) obj).getId());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(getId());
+        }
+    }
+
+    private static final class ModSource extends Source {
         private final ModContainer mod;
 
         ModSource(ModContainer mod) {
+            super(SourceType.MOD);
             this.mod = mod;
         }
 
@@ -94,21 +129,28 @@ public final class BadModDetective implements ModInitializer {
         }
     }
 
-    private static final class ClassSource implements Source {
-        private final Class<?> clazz;
+    private static final class PackageSource extends Source {
+        private final String pkg;
 
-        ClassSource(Class<?> clazz) {
-            this.clazz = clazz;
+        PackageSource(Class<?> clazz) {
+            super(SourceType.PACKAGE);
+
+            String[] components = clazz.getName().split("\\.");
+            if (components.length <= 1) {
+                pkg = "";
+            } else {
+                pkg = String.join(".", Arrays.copyOf(components, Math.min(3, components.length - 1)));
+            }
         }
 
         @Override
         public String getId() {
-            return clazz.getName();
+            return pkg;
         }
 
         @Override
         public String getInfo() {
-            return "Class " + clazz.getName() + " loaded by " + clazz.getClassLoader();
+            return "Package " + pkg;
         }
     }
 
@@ -123,7 +165,7 @@ public final class BadModDetective implements ModInitializer {
         }
 
         void addError(Class<?> source, String error) {
-            errors.put(new ClassSource(source), error);
+            errors.put(new PackageSource(source), error);
         }
 
         void throwIfNeeded() throws BadModException {
@@ -139,7 +181,7 @@ public final class BadModDetective implements ModInitializer {
 
         private String buildTree() {
             return errors.keySet().stream()
-                    .sorted(Comparator.comparing(Source::getId))
+                    .sorted(merge(Comparator.comparing(Source::getType), Comparator.comparing(Source::getId)))
                     .map(it -> "- " + it.getInfo() + "\n" +
                             errors.get(it).stream()
                                     .map(error -> "  - " + error)
