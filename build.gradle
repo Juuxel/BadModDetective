@@ -23,8 +23,6 @@ dependencies {
 
     // PSA: Some older mods, compiled on Loom 0.2.1, might have outdated Maven POMs.
     // You may need to force-disable transitiveness on them.
-    implementation group: 'io.github.classgraph', name: 'classgraph', version: project.classgraph_version
-    include group: 'io.github.classgraph', name: 'classgraph', version: project.classgraph_version
 }
 
 processResources {

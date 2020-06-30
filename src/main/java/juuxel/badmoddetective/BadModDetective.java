@@ -2,8 +2,6 @@ package juuxel.badmoddetective;
 
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
-import io.github.classgraph.ClassGraph;
-import io.github.classgraph.ScanResult;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -18,6 +16,7 @@ import org.apache.logging.log4j.Marker;
 import org.apache.logging.log4j.message.Message;
 import org.apache.logging.log4j.spi.AbstractLogger;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -31,7 +30,16 @@ public final class BadModDetective implements ModInitializer {
     @Override
     public void onInitialize() {
         BadModException badMod = new BadModException();
-        String conTater = FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_1703");
+        String conTaterName = FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_1703");
+        Class<?> rawConTater = null;
+
+        try {
+            rawConTater = Class.forName(conTaterName);
+        } catch (Throwable t) {
+            LOGGER.warn("Could not find Menu", t);
+        }
+
+        Class<?> conTater = rawConTater; // effectively final for lambda
 
         for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
             ModMetadata meta = mod.getMetadata();
@@ -48,14 +56,30 @@ public final class BadModDetective implements ModInitializer {
             if (Files.exists(buildRefmap)) {
                 badMod.addError(mod, "Found unnamed mixin refmap 'build-refmap.json'");
             }
-        }
 
-        try (ScanResult scanResult = new ClassGraph()
-                .enableAllInfo()
-                .scan()) {
-            scanResult.getSubclasses(conTater)
-                    .filter(info -> info.getName().endsWith("Container") && !info.hasAnnotation("org.spongepowered.asm.mixin.Mixin"))
-                    .forEach(info -> badMod.addError(info.loadClass(), "Menu is called 'con tater': " + info.getName()));
+            if (conTater != null) {
+                try {
+                    Path root = mod.getRootPath();
+                    Files.walk(root)
+                            .filter(it -> it.toString().endsWith("Container.class") && !it.getFileName().toString().startsWith("Mixin"))
+                            .map(root::relativize)
+                            .forEach(it -> {
+                                String rawName = it.toString().replace(it.getFileSystem().getSeparator(), ".");
+                                String name = rawName.substring(0, rawName.length() - ".class".length());
+
+                                try {
+                                    Class<?> clazz = Class.forName(name);
+
+                                    if (conTater.isAssignableFrom(clazz)) {
+                                        badMod.addError(mod, "Menu is called con tater: " + name);
+                                    }
+                                } catch (Throwable ignored) {
+                                }
+                            });
+                } catch (IOException e) {
+                    LOGGER.warn("Could not walk mod file tree of mod '{}'", meta.getId(), e);
+                }
+            }
         }
 
         badMod.throwIfNeeded();
@@ -132,10 +156,10 @@ public final class BadModDetective implements ModInitializer {
     private static final class PackageSource extends Source {
         private final String pkg;
 
-        PackageSource(Class<?> clazz) {
+        PackageSource(String className) {
             super(SourceType.PACKAGE);
 
-            String[] components = clazz.getName().split("\\.");
+            String[] components = className.split("\\.");
             if (components.length <= 1) {
                 pkg = "";
             } else {
@@ -165,7 +189,7 @@ public final class BadModDetective implements ModInitializer {
         }
 
         void addError(Class<?> source, String error) {
-            errors.put(new PackageSource(source), error);
+            errors.put(new PackageSource(source.getName()), error);
         }
 
         void throwIfNeeded() throws BadModException {
