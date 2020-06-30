@@ -2,6 +2,8 @@ package juuxel.badmoddetective;
 
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
+import io.github.classgraph.ClassGraph;
+import io.github.classgraph.ScanResult;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -27,6 +29,7 @@ public final class BadModDetective implements ModInitializer {
     @Override
     public void onInitialize() {
         BadModException badMod = new BadModException();
+        String conTater = FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_1703");
 
         for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
             ModMetadata meta = mod.getMetadata();
@@ -45,19 +48,82 @@ public final class BadModDetective implements ModInitializer {
             }
         }
 
+        try (ScanResult scanResult = new ClassGraph()
+                .enableAllInfo()
+                .scan()) {
+            scanResult.getSubclasses(conTater)
+                    .filter(info -> info.getSimpleName().endsWith("Container"))
+                    .forEach(info -> badMod.addError(info.loadClass(), "Menu is called 'con tater': " + info.getName()));
+        }
+
         badMod.throwIfNeeded();
 
         LOGGER.info("[BadModDetective] No bad mods found!");
     }
 
+    private interface Source {
+        String getId();
+
+        String getInfo();
+    }
+
+    private static final class ModSource implements Source {
+        private final ModContainer mod;
+
+        ModSource(ModContainer mod) {
+            this.mod = mod;
+        }
+
+        @Override
+        public String getId() {
+            return mod.getMetadata().getId();
+        }
+
+        @Override
+        public String getInfo() {
+            ModMetadata meta = mod.getMetadata();
+            String id = meta.getId();
+            String name = meta.getName();
+            String authors = meta.getAuthors().isEmpty() ? "unknown" :
+                    meta.getAuthors()
+                            .stream()
+                            .map(Person::getName)
+                            .collect(Collectors.joining(", "));
+
+            return id + " (" + name + ") by " + authors;
+        }
+    }
+
+    private static final class ClassSource implements Source {
+        private final Class<?> clazz;
+
+        ClassSource(Class<?> clazz) {
+            this.clazz = clazz;
+        }
+
+        @Override
+        public String getId() {
+            return clazz.getName();
+        }
+
+        @Override
+        public String getInfo() {
+            return "Class " + clazz.getName() + " loaded by " + clazz.getClassLoader();
+        }
+    }
+
     private static final class BadModException extends RuntimeException {
-        private final Multimap<ModContainer, String> errors = MultimapBuilder.hashKeys().arrayListValues().build();
+        private final Multimap<Source, String> errors = MultimapBuilder.hashKeys().arrayListValues().build();
 
         BadModException() {
         }
 
         void addError(ModContainer mod, String error) {
-            errors.put(mod, error);
+            errors.put(new ModSource(mod), error);
+        }
+
+        void addError(Class<?> source, String error) {
+            errors.put(new ClassSource(source), error);
         }
 
         void throwIfNeeded() throws BadModException {
@@ -73,22 +139,11 @@ public final class BadModDetective implements ModInitializer {
 
         private String buildTree() {
             return errors.keySet().stream()
-                    .sorted(Comparator.comparing(it -> it.getMetadata().getId()))
-                    .map(it -> {
-                        ModMetadata meta = it.getMetadata();
-                        String id = meta.getId();
-                        String name = meta.getName();
-                        String authors = meta.getAuthors().isEmpty() ? "unknown" :
-                                meta.getAuthors()
-                                        .stream()
-                                        .map(Person::getName)
-                                        .collect(Collectors.joining(", "));
-
-                        return "- " + id + " (" + name + ") by " + authors + "\n" +
-                                errors.get(it).stream()
-                                        .map(error -> "  - " + error)
-                                        .collect(Collectors.joining("\n"));
-                    })
+                    .sorted(Comparator.comparing(Source::getId))
+                    .map(it -> "- " + it.getInfo() + "\n" +
+                            errors.get(it).stream()
+                                    .map(error -> "  - " + error)
+                                    .collect(Collectors.joining("\n")))
                     .collect(Collectors.joining("\n"));
         }
     }
