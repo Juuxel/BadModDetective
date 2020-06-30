@@ -56,6 +56,10 @@ public final class BadModDetective implements ModInitializer {
             if (Files.exists(buildRefmap)) {
                 badMod.addError(mod, "Found unnamed mixin refmap 'build-refmap.json'");
             }
+            Path modidMixins = mod.getPath("modid.mixins.json");
+            if (Files.exists(modidMixins)) {
+                badMod.addError(mod, "Found unnamed mixin file 'modid.mixins.json'");
+            }
 
             if (conTater != null) {
                 try {
