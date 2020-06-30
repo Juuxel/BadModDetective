@@ -52,7 +52,7 @@ public final class BadModDetective implements ModInitializer {
                 .enableAllInfo()
                 .scan()) {
             scanResult.getSubclasses(conTater)
-                    .filter(info -> info.getSimpleName().endsWith("Container"))
+                    .filter(info -> info.getName().endsWith("Container") && !info.hasAnnotation("org.spongepowered.asm.mixin.Mixin"))
                     .forEach(info -> badMod.addError(info.loadClass(), "Menu is called 'con tater': " + info.getName()));
         }
 
